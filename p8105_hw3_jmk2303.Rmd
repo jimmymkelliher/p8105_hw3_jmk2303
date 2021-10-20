@@ -1,0 +1,317 @@
+---
+title: "P8105: Data Science I"
+author: "Assignment 3<br>Jimmy Kelliher (UNI: jmk2303)"
+output:
+  github_document:
+    toc: TRUE
+---
+
+<!------------------------------------------------------------------------------------------
+Preamble
+------------------------------------------------------------------------------------------->
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+# load necessary packages
+library(p8105.datasets)
+library(tidyverse)
+
+
+# set knitr defaults
+knitr::opts_chunk$set(
+    echo      = TRUE
+  , fig.width = 6
+  , fig.asp   = .6
+  , out.width = "90%"
+)
+
+# set theme defaults
+theme_set(
+  theme_bw() +
+  theme(
+    legend.position = "bottom"
+    , plot.title    = element_text(hjust = 0.5)
+    , plot.subtitle = element_text(hjust = 0.5)    
+    , plot.caption  = element_text(hjust = 0.0)
+  )
+)
+
+# set color scale defaults
+options(
+    ggplot2.continuous.colour = "viridis"
+  , ggplot2.continuous.fill   = "viridis"
+)
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete   = scale_fill_viridis_d
+```
+
+<!------------------------------------------------------------------------------------------
+Problem 1
+------------------------------------------------------------------------------------------->
+
+# Problem 1
+
+## Instacart
+
+```{r}
+data("instacart")
+head(instacart, 10) %>% knitr::kable()
+```
+
+The goal is to do some exploration of this dataset. To that end, write a short description of the dataset, noting the size and structure of the data, describing some key variables, and giving illstrative examples of observations. Then, do or answer the following (commenting on the results of each):
+
+How many aisles are there, and which aisles are the most items ordered from?
+
+There are `r length(unique(instacart$aisle_id))` aisles.
+
+```{r}
+# rank aisles according to number of items ordered from each aisle
+aisleRank <-
+  instacart %>%
+  group_by(aisle) %>%
+  summarize(n_items_ordered = n()) %>%
+  arrange(-n_items_ordered) %>%
+  mutate(aisle = str_to_title(aisle))
+
+# output top ten
+head(aisleRank, 10) %>% knitr::kable()
+```
+
+Make a plot that shows the number of items ordered in each aisle, limiting this to aisles with more than 10000 items ordered. Arrange aisles sensibly, and organize your plot so others can read it.
+
+```{r aisles_with_most_orders, fig.asp = 1}
+# create vertical bar chart of aisles with highest order traffic
+aisleRank %>%
+  # keep aisles with more than 10000 orders
+  filter(n_items_ordered > 10000) %>%
+  # make aisle an ordered factor variable so that bar plot is ordered intuitively
+  mutate(aisle = reorder(factor(aisle), n_items_ordered)) %>%
+  # instantiate plot
+  ggplot(aes(x = aisle, y = n_items_ordered / 1000)) +
+  # add bars representing counts of orders
+  geom_bar(stat = "identity", width = 0.75) +
+  # flip axes for readability
+  coord_flip() +
+  # add meta-data
+  labs(
+      title    = "Aisles Ranked by Frequency of Orders"
+    , subtitle = "for aisles with more than 10,000 orders"
+    , x        = ""
+    , y        = "Thousands of Orders"
+    , caption  = "Source: Instacart.")
+```
+
+Make a table showing the three most popular items in each of the aisles “baking ingredients”, “dog food care”, and “packaged vegetables fruits”. Include the number of times each item is ordered in your table.
+
+``` {r}
+# identify aisles of interest
+myAisles <- c(
+    "baking ingredients"
+  , "dog food care"
+  , "packaged vegetables fruits"
+)
+
+instacart %>%
+  # restrict to aisles of interest
+  filter(aisle %in% myAisles) %>%
+  # group by pairs (aisle, item)
+  group_by(aisle, product_name) %>%
+  # count number of orders for given item within given aisle
+  summarize(n_items_ordered = n()) %>%
+  # rank by maximum orders
+  mutate(rank = min_rank(-n_items_ordered)) %>%
+  # retain to three items in each aisle
+  filter(rank <= 3) %>%
+  # sort for readability
+  arrange(aisle, rank) %>%
+  # adjust case of characters for readability
+  mutate(aisle = str_to_title(aisle)) %>%
+  # rename columns for readability
+  rename(
+      Aisle = aisle
+    , Product = product_name
+    , Count   = n_items_ordered
+  ) %>%
+  # remove extraneous columns
+  select(-rank) %>%
+  # output table
+  knitr::kable()
+```
+
+Make a table showing the mean hour of the day at which Pink Lady Apples and Coffee Ice Cream are ordered on each day of the week; format this table for human readers (i.e. produce a 2 x 7 table).
+
+``` {r}
+# identify items of interest
+myItems <- c(
+    "Pink Lady Apples"
+  , "Coffee Ice Cream"
+)
+
+# construct a vector of days of the week to correspond to the integer values of order_dow
+myDays  <- c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+
+instacart %>%
+  # restrict to items of interest
+  filter(product_name %in% myItems) %>%
+  # map the integer-valued days of the week (e.g., 0) to characters (e.g., "Sunday")
+  mutate(order_dow_char = 
+    sapply(
+        order_dow
+      , function(x) myDays[as.integer(x + 1)]) # we assume Sunday corresponds to 0       
+  ) %>%
+  # include original order_dow in grouping for sorting purposes
+  group_by(product_name, order_dow, order_dow_char) %>%
+  # compute average number of orders for each item on each day of the week
+  summarize(mean_hour_of_day = round(mean(order_hour_of_day), 2)) %>%
+  # drop order_dow now that the days of the week are properly sorted
+  group_by(product_name, order_dow_char) %>%  
+  select(-order_dow) %>%
+  # pivot to a more human-friendly table
+  pivot_wider(
+      names_from  = order_dow_char
+    , values_from = mean_hour_of_day
+  ) %>%
+  # rename columns for readability
+  rename(Product = product_name) %>%
+  # output table
+  knitr::kable()
+```
+
+
+
+<!------------------------------------------------------------------------------------------
+Problem 2
+------------------------------------------------------------------------------------------->
+
+# Problem 2
+
+## Behavioral Risk Factors Surveillance System (BRFSS)
+
+```{r}
+data("brfss_smart2010")
+```
+
+First, we filter and clean the data.
+
+```{r}
+# identify topics of interest
+myTopics    <- c("Overall Health")
+
+# identify responses of interest, which will also determine order of factor levels
+myResponses <- c("Poor", "Fair", "Good", "Very good", "Excellent")
+
+brfssOH <-
+  brfss_smart2010 %>%
+  janitor::clean_names() %>%
+  filter(
+      topic    %in% myTopics
+    , response %in% myResponses
+  ) %>%
+  mutate(response = factor(response, levels = myResponses))
+
+head(brfssOH, 10) %>% knitr::kable()
+```
+
+In 2002, which states were observed at 7 or more locations? What about in 2010?
+
+```{r}
+# for convenience, we construct a function that identifies states observed in at least
+# myLoc locations in myYear
+statesObserved <- function(
+    myYear = 2002 # the year of interest; defaults to 2002
+  , myLoc  = 7    # the location threshold; defaults to 7
+) {
+  # identify the list of states observed in at least myLoc locations during myYear 
+  myStates <-
+    brfssOH %>%
+    # restrict to myYear
+    filter(year %in% myYear) %>%
+    # retain only dataset of locations by state
+    select(locationabbr, locationdesc) %>%
+    # remove duplicates
+    distinct() %>%
+    # group by state
+    group_by(locationabbr) %>%
+    # count number of locations in each state
+    summarize(count = n()) %>%
+    # retain only states for which count of locations is not less than myLoc
+    filter(count >= myLoc) %>%
+    # pull vector of such states
+    pull(locationabbr)
+
+  # output result as a meaningful sentence
+  paste(c(
+      "The following "
+    , paste(length(myStates), "states were observed at 7 or more locations in ")
+    , paste(myYear, ": ", sep = "")
+    , paste(myStates, collapse = ", ")
+    , "."
+  ), collapse = "")
+}
+
+statesObserved(2002)
+statesObserved(2010)
+```
+
+Construct a dataset that is limited to Excellent responses, and contains, year, state, and a variable that averages the data_value across locations within a state. Make a “spaghetti” plot of this average value over time within a state (that is, make a plot showing a line for each state across years – the geom_line geometry and group aesthetic will help).
+
+```{r values_over_time_by_state}
+brfssOH %>%
+  filter(response == "Excellent") %>%
+  select(year, locationabbr, locationdesc, data_value) %>%
+  group_by(year, locationabbr) %>%
+  summarize(mean_value = mean(data_value, na.rm = TRUE)) %>%
+  ggplot(aes(x = year, y = mean_value, group = locationabbr)) +
+  geom_line()
+
+```
+
+Make a two-panel plot showing, for the years 2006, and 2010, distribution of data_value for responses (“Poor” to “Excellent”) among locations in NY State.
+
+```{r distribution_of_values_NY}
+brfssOH %>%
+  filter(locationabbr == "NY", year %in% c(2006, 2010)) %>%
+  group_by(year) %>%
+  ggplot(aes(x = data_value)) +
+  geom_density() +
+  facet_grid(~year)
+```
+
+```{r distribution_of_values_by_response_NY}
+brfssOH %>%
+  filter(locationabbr == "NY", year %in% c(2006, 2010)) %>%
+  group_by(year) %>%
+  ggplot(aes(x = data_value, group = response, color = response)) +
+  geom_density() +
+  facet_grid(~year)
+```
+
+<!------------------------------------------------------------------------------------------
+Problem 3
+------------------------------------------------------------------------------------------->
+
+# Problem 3
+
+## Accelerometer Data
+
+Accelerometers have become an appealing alternative to self-report techniques for studying physical activity in observational studies and clinical trials, largely because of their relative objectivity. During observation periods, the devices measure “activity counts” in a short period; one-minute intervals are common. Because accelerometers can be worn comfortably and unobtrusively, they produce around-the-clock observations.
+
+This problem uses five weeks of accelerometer data collected on a 63 year-old male with BMI 25, who was admitted to the Advanced Cardiac Care Center of Columbia University Medical Center and diagnosed with congestive heart failure (CHF). The data can be downloaded here. In this spreadsheet, variables activity.* are the activity counts for each minute of a 24-hour day starting at midnight.
+
+Load, tidy, and otherwise wrangle the data. Your final dataset should include all originally observed variables and values; have useful variable names; include a weekday vs weekend variable; and encode data with reasonable variable classes. Describe the resulting dataset (e.g. what variables exist, how many observations, etc).
+
+```{r}
+
+```
+
+Traditional analyses of accelerometer data focus on the total activity over the day. Using your tidied dataset, aggregate accross minutes to create a total activity variable for each day, and create a table showing these totals. Are any trends apparent?
+
+```{r}
+
+```
+
+Accelerometer data allows the inspection activity over the course of the day. Make a single-panel plot that shows the 24-hour activity time courses for each day and use color to indicate day of the week. Describe in words any patterns or conclusions you can make based on this graph.
+
+```{r}
+
+```
+
