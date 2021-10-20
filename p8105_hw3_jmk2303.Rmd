@@ -52,28 +52,33 @@ Problem 1
 
 ## Instacart
 
+We begin by loading in the Instacart data and outputting the first few observations.
+
 ```{r}
 data("instacart")
-head(instacart, 10) %>% knitr::kable()
+head(instacart) %>% knitr::kable()
 ```
 
-The goal is to do some exploration of this dataset. To that end, write a short description of the dataset, noting the size and structure of the data, describing some key variables, and giving illstrative examples of observations. Then, do or answer the following (commenting on the results of each):
-
-How many aisles are there, and which aisles are the most items ordered from?
-
-There are `r length(unique(instacart$aisle_id))` aisles.
+There are `r round(nrow(instacart) / 10^6, 2)` million observations and `r ncol(instacart)` variables in the `instacart` dataset. Each observation in the dataset is uniquely identified by the pair (`order_id`, `product_id`), which respectively indicate each order and each product purchased in said order. There are over `r round(length(unique(pull(instacart, user_id))) / 1000, 0)`,000 users represented in the data, and each user purchased about `r round(mean(instacart %>% group_by(order_id) %>% summarize(count = n()) %>% pull(count)), 2)` products per order on average. There are `r length(unique(instacart$aisle_id))` aisles represented in the data, and we present the top ten most heavily shopped aisles below.
 
 ```{r}
 # rank aisles according to number of items ordered from each aisle
 aisleRank <-
   instacart %>%
+  # group by aisle
   group_by(aisle) %>%
+  # count the items in each aisle
   summarize(n_items_ordered = n()) %>%
+  # order the aisles from most popular to least popular
   arrange(-n_items_ordered) %>%
+  # adjust case of variables for readability
   mutate(aisle = str_to_title(aisle))
 
-# output top ten
-head(aisleRank, 10) %>% knitr::kable()
+# output top ten products
+head(aisleRank, 10) %>% knitr::kable(
+    col.names = c("Aisle", "Number of Products Ordered")
+  , format.args = list(big.mark = ",")
+)
 ```
 
 Make a plot that shows the number of items ordered in each aisle, limiting this to aisles with more than 10000 items ordered. Arrange aisles sensibly, and organize your plot so others can read it.
@@ -344,7 +349,9 @@ accelData %>%
   group_by(week, day_of_week, day_of_week_char) %>%
   summarize(total_activity = sum(activity)) %>%
   knitr::kable()
+```
 
+```{r total_activity_by_day}
 accelData %>%
   group_by(week, day_of_week) %>%
   summarize(total_activity = sum(activity)) %>%
@@ -354,7 +361,7 @@ accelData %>%
 
 Accelerometer data allows the inspection activity over the course of the day. Make a single-panel plot that shows the 24-hour activity time courses for each day and use color to indicate day of the week. Describe in words any patterns or conclusions you can make based on this graph.
 
-```{r}
+```{r activity_vs_minute}
 accelData %>%
   ggplot(aes(
       x     = (minute_of_day - 1) / 60
@@ -365,7 +372,7 @@ accelData %>%
   geom_line()
 ```
 
-```{r}
+```{r activity_vs_minute_by_day}
 accelData %>%
   ggplot(aes(
       x     = (minute_of_day - 1) / 60
