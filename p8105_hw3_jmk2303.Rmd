@@ -300,18 +300,79 @@ This problem uses five weeks of accelerometer data collected on a 63 year-old ma
 Load, tidy, and otherwise wrangle the data. Your final dataset should include all originally observed variables and values; have useful variable names; include a weekday vs weekend variable; and encode data with reasonable variable classes. Describe the resulting dataset (e.g. what variables exist, how many observations, etc).
 
 ```{r}
-
+accelDataRaw <- read_csv("datasets/accel_data.csv")
 ```
+
+```{r}
+accelData <-
+  accelDataRaw %>%
+  pivot_longer(
+      cols            = starts_with("activity.")
+    , names_to        = "minute_of_day"
+    , names_prefix    = "activity."
+    , names_transform = list(minute_of_day = as.integer)
+    , values_to       = "activity"
+  ) %>%
+  rename(day_of_week_char = day) %>%
+  mutate(
+      week             = as.integer(week)
+    , day_of_week      = sapply(
+          day_of_week_char
+        , function(x) which(myDays[c(2:7, 1)] == x))
+    , is_weekday       = !(day_of_week_char %in% c("Saturday", "Sunday"))
+    , day_of_week_char = factor(day_of_week_char, levels = myDays)
+  ) %>%
+  relocate(week, day_of_week, minute_of_day, day_of_week_char, is_weekday) %>%
+  arrange(week, day_of_week, minute_of_day) %>%
+  select(-day_id)
+
+head(accelData) %>% knitr::kable()
+```
+
+Even though the instructions ask us to retain all of the original variables of the dataset, it does not make sense to retain `day_id` since the days of the week are not even properly ordered in the original spreadsheet! The first row is labeled as "Friday," the second row is labeled as "Monday," and the third row is labeled as "Saturday." As such, we cannot even be certain if the study began on a Friday or some other day, which will be important when we consider the time trend in a future exercise. This is less a tidiness issue and more a data quality issue. Alas!
+
+To deal with this frustration, we assume that data collection began on a Friday, and we order our dataset accordingly to generate a proper ID variable. In particular, the ordered triple (`week`, `day_of_week`, `minute_of_day`) uniquely identifies each row, and it tries to impart an ordering as best it can given the aforementioned data ambiguity. Thus, (`week`, `day_of_week`, `minute_of_day`) = (1, 1, 1) corresponds to (our best guess at) the first observation chronologically in the dataset. Of course, this ordering is no worse than the original ordering in the untidy dataset.
+
+
+
+
 
 Traditional analyses of accelerometer data focus on the total activity over the day. Using your tidied dataset, aggregate accross minutes to create a total activity variable for each day, and create a table showing these totals. Are any trends apparent?
 
 ```{r}
+accelData %>%
+  group_by(week, day_of_week, day_of_week_char) %>%
+  summarize(total_activity = sum(activity)) %>%
+  knitr::kable()
 
+accelData %>%
+  group_by(week, day_of_week) %>%
+  summarize(total_activity = sum(activity)) %>%
+  ggplot(aes(x = week + (day_of_week - 1) / 7, y = total_activity / 1000)) +
+  geom_line()
 ```
 
 Accelerometer data allows the inspection activity over the course of the day. Make a single-panel plot that shows the 24-hour activity time courses for each day and use color to indicate day of the week. Describe in words any patterns or conclusions you can make based on this graph.
 
 ```{r}
-
+accelData %>%
+  ggplot(aes(
+      x     = (minute_of_day - 1) / 60
+    , y     = activity
+    , group = week + (day_of_week - 1) / 7
+    , color = day_of_week_char
+  )) +
+  geom_line()
 ```
+
+```{r}
+accelData %>%
+  ggplot(aes(
+      x     = (minute_of_day - 1) / 60
+    , y     = activity
+    , color = day_of_week_char
+  )) +
+  geom_smooth(se = FALSE)
+```
+
 
