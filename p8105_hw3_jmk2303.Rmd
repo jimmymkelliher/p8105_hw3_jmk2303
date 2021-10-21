@@ -15,7 +15,6 @@ Preamble
 library(p8105.datasets)
 library(tidyverse)
 
-
 # set knitr defaults
 knitr::opts_chunk$set(
     echo      = TRUE
@@ -281,7 +280,7 @@ statesObserved <- function(
   paste(c(
       "the following "
     # identify number of states meeting criterion
-    , paste(length(myStates), "states were observed at 7 or more locations in ")
+    , paste(length(myStates), "states were observed at", myLoc, "or more locations in ")
     # identify year
     , paste(myYear, ": ", sep = "")
     # enumerate states meeting criterion
